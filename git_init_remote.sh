@@ -10,7 +10,6 @@ REPO_NAME="$(basename $REPO_PATH).git"
 BARE_REPO_PATH="$REPO_PATH/$REPO_NAME"
 
 cd $REPO_PATH
-git status
 git clone --bare $REPO_PATH $BARE_REPO_PATH
 scp -r $BARE_REPO_PATH $GIT_URL 
 git remote add origin $GIT_URL$REPO_NAME
