@@ -14,4 +14,5 @@ git clone --bare $REPO_PATH $BARE_REPO_PATH
 scp -r $BARE_REPO_PATH $GIT_URL 
 git remote add origin $GIT_URL$REPO_NAME
 rm -rf $BARE_REPO_PATH
+git fetch origin
 git branch -u origin/master
