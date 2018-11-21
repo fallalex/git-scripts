@@ -28,8 +28,9 @@ BARE_REPO_PATH="$REPO_PATH/$REPO_NAME"
 
 cd $REPO_PATH
 git clone --bare $REPO_PATH $BARE_REPO_PATH
-scp -r $BARE_REPO_PATH $GIT_URL 
+rsync -vr -e ssh $BARE_REPO_PATH $GIT_URL 
 git remote add origin $GIT_URL$REPO_NAME
+git remote set-url origin $GIT_URL$REPO_NAME
 rm -rf $BARE_REPO_PATH
 git fetch origin
 git branch -u origin/master

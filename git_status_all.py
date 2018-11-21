@@ -5,7 +5,7 @@
 import sys
 import os
 import glob
-import commands
+import subprocess
 from optparse import OptionParser
 
 # Setup some stuff
@@ -14,20 +14,20 @@ gitted  = False
 mini    = True
 
 class bcolors:
-	HEADER = '\033[95m'
-	OKBLUE = '\033[94m'
-	OKGREEN = '\033[92m'
-	WARNING = '\033[93m'
-	FAIL = '\033[91m'
-	ENDC = '\033[0m'
+        HEADER = '\033[95m'
+        OKBLUE = '\033[94m'
+        OKGREEN = '\033[92m'
+        WARNING = '\033[93m'
+        FAIL = '\033[91m'
+        ENDC = '\033[0m'
 
-	def disable(self):
-		self.HEADER = ''
-		self.OKBLUE = ''
-		self.OKGREEN = ''
-		self.WARNING = ''
-		self.FAIL = ''
-		self.ENDC = ''
+        def disable(self):
+                self.HEADER = ''
+                self.OKBLUE = ''
+                self.OKGREEN = ''
+                self.WARNING = ''
+                self.FAIL = ''
+                self.ENDC = ''
 
 parser = OptionParser(description="\
 Show Status is awesome. If you tell it a directory to look in, it'll scan \
@@ -37,39 +37,39 @@ It can also push and pull to/from a remote location (like github.com) \
 (but only if there are no changes.) \
 Contact mike@mikepearce.net for any support.")
 parser.add_option("-d", "--dir",
-                    dest    = "dirname",
-                    action  = "store",
-                    help    = "The directory to parse sub dirs from",
-                    default = os.path.abspath("./")+"/"
-                    )
+                  dest    = "dirname",
+                  action  = "store",
+                  help    = "The directory to parse sub dirs from",
+                  default = os.path.abspath("./")+"/"
+)
 
 parser.add_option("-v", "--verbose",
                   action    = "store_true",
                   dest      = "verbose",
                   default   = False,
                   help      = "Show the full detail of git status"
-                  )
+)
 
 parser.add_option("-r", "--remote",
-                action      = "store",
-                dest        = "remote",
-                default     = "",
-                help        = "Set the remote name (remotename:branchname)"
-                )
+                  action      = "store",
+                  dest        = "remote",
+                  default     = "",
+                  help        = "Set the remote name (remotename:branchname)"
+)
 
 parser.add_option("--push",
-                action      = "store_true",
-                dest        = "push",
-                default     = False,
-                help        = "Do a 'git push' if you've set a remote with -r it will push to there"
-                )
+                  action      = "store_true",
+                  dest        = "push",
+                  default     = False,
+                  help        = "Do a 'git push' if you've set a remote with -r it will push to there"
+)
 
 parser.add_option("-p", "--pull",
-                action      = "store_true",
-                dest        = "pull",
-                default     = False,
-                help        = "Do a 'git pull' if you've set a remote with -r it will pull from there"
-                )
+                  action      = "store_true",
+                  dest        = "pull",
+                  default     = False,
+                  help        = "Do a 'git pull' if you've set a remote with -r it will pull from there"
+)
 
 # Now, parse the args
 (options, args) = parser.parse_args()
@@ -104,7 +104,9 @@ if __name__ == "__main__":
 
             # OK, contains a .git file. Let's descend into it
             # and ask git for a status
-            out = commands.getoutput('cd '+ infile + '; git status')
+            #out = commands.getoutput('cd '+ infile + '; git status')
+            p = subprocess.run(["cd", infile, ";", "git", "status"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out = p.stdout.decode("utf-8").strip()
 
             # Mini?
             if False == options.verbose:
@@ -114,12 +116,12 @@ if __name__ == "__main__":
                 branch = out[j+10:k];
                 branchColor = bcolors.WARNING;
 
-		if branch == 'master':
-			branchColor = bcolors.OKGREEN
+                if branch == 'master':
+                    branchColor = bcolors.OKGREEN
 
-		branch = "[ " + branchColor + branch.ljust(15) + bcolors.ENDC + " ]"
+                branch = "[ " + branchColor + branch.ljust(15) + bcolors.ENDC + " ]"
 
-		if -1 != out.find('nothing'):
+                if -1 != out.find('nothing'):
                     result = bcolors.OKGREEN + "No Changes" + bcolors.ENDC
 
                     # Pull from the remote
@@ -140,8 +142,8 @@ if __name__ == "__main__":
                         )
                         result = result + " (Pushed) \n" + push
 
-		else:
-		    result = bcolors.FAIL + "Changes" + bcolors.ENDC
+                else:
+                    result = bcolors.FAIL + "Changes" + bcolors.ENDC
 
                 # Write to screen
                 sys.stdout.write("-- " + bcolors.OKBLUE + infile.ljust(55) + bcolors.ENDC + branch + " : " + result +"\n")
@@ -153,7 +155,9 @@ if __name__ == "__main__":
                 sys.stdout.write("\n---------------- "+ infile +" -----------------\n")
 
             # Come out of the dir and into the next
-            commands.getoutput('cd ../')
+            # commands.getoutput('cd ../')
+            p = subprocess.run(["cd", "../"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            out = p.stdout.decode("utf-8").strip()
 
 
 
