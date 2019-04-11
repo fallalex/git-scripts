@@ -15,7 +15,41 @@ from pygit2 import Remote
 from pygit2 import KeypairFromAgent
 from pygit2 import RemoteCallbacks
 from pygit2 import GIT_STATUS_CURRENT
+from pygit2 import GIT_STATUS_WT_NEW
+from pygit2 import GIT_STATUS_WT_MODIFIED
+from pygit2 import GIT_STATUS_WT_DELETED
+from pygit2 import GIT_STATUS_WT_TYPECHANGE
+from pygit2 import GIT_STATUS_INDEX_TYPECHANGE
+from pygit2 import GIT_STATUS_WT_RENAMED
+from pygit2 import GIT_STATUS_WT_UNREADABLE
+from pygit2 import GIT_STATUS_IGNORED
+from pygit2 import GIT_STATUS_CONFLICTED
 from pygit2 import GitError
+
+# Status flags for a single file.
+# A combination of these values will be returned to indicate the status of
+# a file.  Status compares the working directory, the index, and the
+# current HEAD of the repository.  The `GIT_STATUS_INDEX` set of flags
+# represents the status of file in the index relative to the HEAD, and the
+# `GIT_STATUS_WT` set of flags represent the status of the file in the
+# working directory relative to the index.
+#
+# working tree (WT) -> index -> HEAD
+#
+# becaue I am working to update the index to match the working directory/tree
+# will only need to work with the GIT_STATUS_WT. Sadly git_index_update_all
+# from libgit2 does not have a method in pygit2 so I need to do this myself.
+#
+# GIT_STATUS_CURRENT
+# GIT_STATUS_WT_NEW                  index.add()
+# GIT_STATUS_WT_MODIFIED             index.add()
+# GIT_STATUS_WT_DELETED              index.remove()
+# GIT_STATUS_WT_TYPECHANGE           symlink to file or file to symlink resolve manually
+# GIT_STATUS_INDEX_TYPECHANGE        symlink to file or file to symlink resolve manually
+# GIT_STATUS_WT_RENAMED              index.add()
+# GIT_STATUS_WT_UNREADABLE           error
+# GIT_STATUS_IGNORED                 well just ignore it I guess
+# GIT_STATUS_CONFLICTED              error
 
 class GitStatusBot():
 
@@ -24,6 +58,10 @@ class GitStatusBot():
         self.glob_pattern = '/**/.git'
         self.committer = Signature('GitStatusBot', 'gitstat@fallalex.com')
         self.push_user = 'git'
+        self.flagerrors = [GIT_STATUS_CONFLICTED, GIT_STATUS_WT_UNREADABLE,\
+                           GIT_STATUS_WT_TYPECHANGE, GIT_STATUS_INDEX_TYPECHANGE]
+        self.flagflags  = [GIT_STATUS_WT_NEW, GIT_STATUS_WT_RENAMED,\
+                           GIT_STATUS_WT_MODIFIED, GIT_STATUS_WT_DELETED]
         self.find_repos()
         self.grab_latest()
 
@@ -65,7 +103,7 @@ class GitStatusBot():
             if selection.isdigit() and int(selection) in range_list:
                 return int(selection)
             if every is True and selection.lower() in every_valid:
-                return True
+                return 'all'
             if cancel is True and selection.lower() in cancel_valid:
                 return False
 
@@ -73,7 +111,7 @@ class GitStatusBot():
     def match(self, query):
         query = str(query)
         # match all
-        if query.lower() == 'all':
+        if query == 'all':
             return  sorted(list(self.repos.keys()))
 
         # allow current directory 'dot' syntax
@@ -102,7 +140,7 @@ class GitStatusBot():
         matches = [m[0] for m in matches if m[1] == max_ratio]
         if len(matches) > 1:
             print(self.list_repos(matches))
-            result = self.prompt_int_range('Mutiple matches, which one(s)?',
+            result = self.prompt_int_range('Multiple matches, which one(s)?',
                     list(range(1,len(matches)+1)))
             if result is False:
                 return False
@@ -159,9 +197,11 @@ class GitStatusBot():
         for repo, v in self.repos.items():
             status = v['obj'].status()
             dirt = list()
-            for filepath, flags in status.items():
-                if flags != GIT_STATUS_CURRENT:
-                    dirt.append(filepath)
+            for filepath, flag in status.items():
+                if flag in self.flagflags:
+                    dirt.append((filepath, flag))
+                if flag in self.flagerrors:
+                    exit("Error", self.flagerrors, flag, filepath, "resolve manually")
             if len(dirt):
                 self.dirty.add(repo)
                 self.repos[repo]['dirt'] = tuple(sorted(dirt))
@@ -179,36 +219,37 @@ class GitStatusBot():
                     self.ahead.add(repo)
 
 
-    def git_add(self, repo):
+    def git_update(self, repo):
         if repo in self.dirty:
             repo_obj = self.repos[repo]['obj']
             index = repo_obj.index
             index.read()
             if 'dirt' in self.repos[repo]:
-                for path in self.repos[repo]['dirt']:
-                    index.add(path)
+                for path, flag in self.repos[repo]['dirt']:
+                    if flag == GIT_STATUS_WT_DELETED:
+                        index.remove(path)
+                    else:
+                        index.add(path)
                 index.write()
                 return True
         return False
 
 
     def git_commit(self, repo, msg):
-        if repo in self.dirty:
-            repo_obj = self.repos[repo]['obj']
-            index = repo_obj.index
-            index.read()
-            try:
-                repo_obj.create_commit(
-                    repo_obj.head.name,
-                    repo_obj.default_signature,
-                    self.committer,
-                    msg,
-                    index.write_tree(),
-                    [repo_obj.head.get_object().hex])
-                return True
-            except Exception as e:
-                return e
-        return False
+        repo_obj = self.repos[repo]['obj']
+        index = repo_obj.index
+        index.read()
+        try:
+            repo_obj.create_commit(
+                repo_obj.head.name,
+                repo_obj.default_signature,
+                self.committer,
+                msg,
+                index.write_tree(),
+                [repo_obj.head.get_object().hex])
+            return True
+        except Exception as e:
+            return e
 
 
     def git_push(self, repo):
@@ -242,11 +283,11 @@ def cli_parse():
     parser.add_argument('-s',
                         '--sync',
                         action='store_true',
-                        help="equivalent to '-acp'")
-    parser.add_argument('-a',
-                        '--add',
+                        help="equivalent to '-ucp'")
+    parser.add_argument('-u',
+                        '--update',
                         action='store_true',
-                        help='git add')
+                        help='git update (add and rm)')
     parser.add_argument('-c',
                         '--commit',
                         action='store_true',
@@ -270,18 +311,18 @@ def cli_parse():
                         help='no output')
     args = parser.parse_args()
     if args.sync:
-        args.add == True
-        args.commit == True
-        args.push == True
+        args.update = True
+        args.commit = True
+        args.push = True
     return args
 
 def main():
     args = cli_parse()
     home = Path.home()
-    paths = ['scripts', 'configuration', 'development', '.password-store', 'ansible']
+    paths = ['scripts', 'configuration', 'development', '.password-store', 'ansible','vimwiki']
     paths = [home / Path(path) for path in paths]
     if args.message is None:
-        args.message = 'comitted by gitstat.py'
+        args.message = 'committed by gitstat.py'
 
     gitbot = GitStatusBot(paths)
 
@@ -295,12 +336,12 @@ def main():
             "Which repo(s)?",
             list(range(1,len(gitbot.repos)+1)))
 
-        if entry is True:
-            repos = gitbot.match('all')
-        elif entry is False:
+        if entry == False:
             sys.exit()
         else:
             repos = gitbot.match(entry)
+
+    print(args.update,args.commit,args.push)
 
     if args.repo:
         repos = gitbot.match(args.repo)
@@ -308,18 +349,18 @@ def main():
     if not isinstance(repos, list):
         sys.exit()
 
-    if args.add:
+    if args.update:
         for repo in repos:
-            if gitbot.git_add(repo):
+            if gitbot.git_update(repo):
                 print('Indexed', repo)
 
     if args.commit:
         for repo in repos:
             result = gitbot.git_commit(repo, args.message)
             if result is True:
-                print('Commited', repo)
-            elif result is not False:
-                print('Error', repo, result)
+                print('Committed', repo)
+            else:
+                print(repo, result)
 
     if args.push:
         for repo in repos:
@@ -330,14 +371,6 @@ def main():
                 print('Error', repo, result)
 
     sys.exit()
-    for k,v in gitbot.dirty.items():
-        gitbot.git_add(k)
-        if args.message:
-            gitbot.git_commit(k, args.message)
-        else:
-            gitbot.git_commit(k)
-        gitbot.git_push(k)
-        print(k, v['dirt'])
 
 
 if __name__ == "__main__": main()
