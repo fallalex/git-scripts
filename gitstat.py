@@ -68,6 +68,7 @@ class GitStatusBot():
 
     def grab_latest(self):
         self.ahead_repos()
+        self.diff_repos()
         self.dirty_repos()
 
 
@@ -207,6 +208,13 @@ class GitStatusBot():
                 self.repos[repo]['dirt'] = tuple(sorted(dirt))
 
 
+    def diff_repos(self):
+        self.diff = set()
+        for repo, v in self.repos.items():
+            if len(v['obj'].diff(cached=True)):
+                self.diff.add(repo)
+
+
     def ahead_repos(self):
         self.ahead = set()
         branches = {'master', 'origin/master'}
@@ -236,20 +244,22 @@ class GitStatusBot():
 
 
     def git_commit(self, repo, msg):
-        repo_obj = self.repos[repo]['obj']
-        index = repo_obj.index
-        index.read()
-        try:
-            repo_obj.create_commit(
-                repo_obj.head.name,
-                repo_obj.default_signature,
-                self.committer,
-                msg,
-                index.write_tree(),
-                [repo_obj.head.get_object().hex])
-            return True
-        except Exception as e:
-            return e
+        if repo in self.diff:
+            repo_obj = self.repos[repo]['obj']
+            index = repo_obj.index
+            index.read()
+            try:
+                repo_obj.create_commit(
+                    repo_obj.head.name,
+                    repo_obj.default_signature,
+                    self.committer,
+                    msg,
+                    index.write_tree(),
+                    [repo_obj.head.get_object().hex])
+                return True
+            except Exception as e:
+                return e
+        return False
 
 
     def git_push(self, repo):
@@ -358,7 +368,7 @@ def main():
             result = gitbot.git_commit(repo, args.message)
             if result is True:
                 print('Committed', repo)
-            else:
+            elif result is not False:
                 print(repo, result)
         gitbot.grab_latest()
 
@@ -367,7 +377,7 @@ def main():
             result = gitbot.git_push(repo)
             if result is True:
                 print('Pushed', repo)
-            else:
+            elif result is not False:
                 print(repo, result)
 
     sys.exit()
