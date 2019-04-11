@@ -341,8 +341,6 @@ def main():
         else:
             repos = gitbot.match(entry)
 
-    print(args.update,args.commit,args.push)
-
     if args.repo:
         repos = gitbot.match(args.repo)
 
@@ -353,6 +351,7 @@ def main():
         for repo in repos:
             if gitbot.git_update(repo):
                 print('Indexed', repo)
+        gitbot.grab_latest()
 
     if args.commit:
         for repo in repos:
@@ -361,14 +360,15 @@ def main():
                 print('Committed', repo)
             else:
                 print(repo, result)
+        gitbot.grab_latest()
 
     if args.push:
         for repo in repos:
             result = gitbot.git_push(repo)
             if result is True:
                 print('Pushed', repo)
-            elif result is not False:
-                print('Error', repo, result)
+            else:
+                print(repo, result)
 
     sys.exit()
 
