@@ -159,6 +159,10 @@ class GitStatusBot():
             flag += '*'
         else:
             flag += ' '
+        if repo in self.diff:
+            flag += '-'
+        else:
+            flag += ' '
         if repo in self.ahead:
             flag += '^'
         else:
