@@ -9,21 +9,12 @@ from glob import glob
 from collections import defaultdict
 
 from fuzzywuzzy import process
+import pygit2
 from pygit2 import Repository
 from pygit2 import Signature
 from pygit2 import Remote
 from pygit2 import KeypairFromAgent
 from pygit2 import RemoteCallbacks
-from pygit2 import GIT_STATUS_CURRENT
-from pygit2 import GIT_STATUS_WT_NEW
-from pygit2 import GIT_STATUS_WT_MODIFIED
-from pygit2 import GIT_STATUS_WT_DELETED
-from pygit2 import GIT_STATUS_WT_TYPECHANGE
-from pygit2 import GIT_STATUS_INDEX_TYPECHANGE
-from pygit2 import GIT_STATUS_WT_RENAMED
-from pygit2 import GIT_STATUS_WT_UNREADABLE
-from pygit2 import GIT_STATUS_IGNORED
-from pygit2 import GIT_STATUS_CONFLICTED
 from pygit2 import GitError
 
 # Status flags for a single file.
@@ -44,12 +35,12 @@ from pygit2 import GitError
 # GIT_STATUS_WT_NEW                  index.add()
 # GIT_STATUS_WT_MODIFIED             index.add()
 # GIT_STATUS_WT_DELETED              index.remove()
-# GIT_STATUS_WT_TYPECHANGE           symlink to file or file to symlink resolve manually
-# GIT_STATUS_INDEX_TYPECHANGE        symlink to file or file to symlink resolve manually
 # GIT_STATUS_WT_RENAMED              index.add()
 # GIT_STATUS_WT_UNREADABLE           error
 # GIT_STATUS_IGNORED                 well just ignore it I guess
 # GIT_STATUS_CONFLICTED              error
+# GIT_STATUS_WT_TYPECHANGE           symlink to file or file to symlink resolve manually
+# GIT_STATUS_INDEX_TYPECHANGE        symlink to file or file to symlink resolve manually
 
 class GitStatusBot():
 
@@ -58,18 +49,55 @@ class GitStatusBot():
         self.glob_pattern = '/**/.git'
         self.committer = Signature('GitStatusBot', 'gitstat@fallalex.com')
         self.push_user = 'git'
-        self.flagerrors = [GIT_STATUS_CONFLICTED, GIT_STATUS_WT_UNREADABLE,\
-                           GIT_STATUS_WT_TYPECHANGE, GIT_STATUS_INDEX_TYPECHANGE]
-        self.flagflags  = [GIT_STATUS_WT_NEW, GIT_STATUS_WT_RENAMED,\
-                           GIT_STATUS_WT_MODIFIED, GIT_STATUS_WT_DELETED]
+        self.flagerrors = ['GIT_STATUS_CONFLICTED', 'GIT_STATUS_WT_UNREADABLE',\
+                           'GIT_STATUS_WT_TYPECHANGE', 'GIT_STATUS_INDEX_TYPECHANGE']
+        self.flagupdate = ['GIT_STATUS_WT_NEW', 'GIT_STATUS_WT_RENAMED',\
+                           'GIT_STATUS_WT_MODIFIED', 'GIT_STATUS_WT_DELETED']
+        self.flagcommit = ['GIT_STATUS_INDEX_NEW', 'GIT_STATUS_INDEX_RENAMED',\
+                           'GIT_STATUS_INDEX_MODIFIED', 'GIT_STATUS_INDEX_DELETED']
+        self.status_flags = {'GIT_STATUS_CURRENT'          : pygit2.GIT_STATUS_CURRENT,\
+                             'GIT_STATUS_INDEX_NEW'        : pygit2.GIT_STATUS_INDEX_NEW,\
+                             'GIT_STATUS_INDEX_MODIFIED'   : pygit2.GIT_STATUS_INDEX_MODIFIED,\
+                             'GIT_STATUS_INDEX_DELETED'    : pygit2.GIT_STATUS_INDEX_DELETED,\
+                             'GIT_STATUS_INDEX_RENAMED'    : pygit2.GIT_STATUS_INDEX_RENAMED,\
+                             'GIT_STATUS_INDEX_TYPECHANGE' : pygit2.GIT_STATUS_INDEX_TYPECHANGE,\
+                             'GIT_STATUS_WT_NEW'           : pygit2.GIT_STATUS_WT_NEW,\
+                             'GIT_STATUS_WT_MODIFIED'      : pygit2.GIT_STATUS_WT_MODIFIED,\
+                             'GIT_STATUS_WT_DELETED'       : pygit2.GIT_STATUS_WT_DELETED,\
+                             'GIT_STATUS_WT_TYPECHANGE'    : pygit2.GIT_STATUS_WT_TYPECHANGE,\
+                             'GIT_STATUS_WT_RENAMED'       : pygit2.GIT_STATUS_WT_RENAMED,\
+                             'GIT_STATUS_WT_UNREADABLE'    : pygit2.GIT_STATUS_WT_UNREADABLE,\
+                             'GIT_STATUS_IGNORED'          : pygit2.GIT_STATUS_IGNORED,\
+                             'GIT_STATUS_CONFLICTED'       : pygit2.GIT_STATUS_CONFLICTED}
+        self.status_flags_value = dict ( (v,k) for k, v in self.status_flags.items() )
+
         self.find_repos()
         self.grab_latest()
 
 
     def grab_latest(self):
+        self.repo_flags()
         self.ahead_repos()
         self.diff_repos()
         self.dirty_repos()
+
+
+    def unpack_flags(self, flags):
+        if flags == 0:
+            return set(0)
+        flag_set = set()
+        for flag in sorted(list(self.status_flags_value.keys()))[::-1][:-1]:
+            if flags >= flag:
+                flags -= flag
+                flag_set.add(flag)
+        return flag_set
+
+
+    def flagin(self, flag, check_flags):
+        for flag_name in check_flags:
+            if flag == self.status_flags[flag_name]:
+                return True
+        return False
 
 
     def match_list(self, query, items=None):
@@ -177,6 +205,7 @@ class GitStatusBot():
             return False
         digits = len(str(len(repo_list)))
         id_dent = ' ' * digits
+        # list_str = id_dent + ' UCP\n'
         list_str = ''
         for idx, repo in enumerate(sorted(repo_list)):
             flags = ''
@@ -197,26 +226,35 @@ class GitStatusBot():
                     self.repos[repo]['obj'] = Repository(str(path))
 
 
+    def repo_flags(self):
+        for repo, v in self.repos.items():
+            status = v['obj'].status()
+            v['fileflags'] = set()
+            v['flags'] = set()
+            for filepath, flags in status.items():
+                flags = self.unpack_flags(flags)
+                v['fileflags'].add((filepath, tuple(flags)))
+                v['flags'] |= flags
+            for flag in v['flags']:
+                if self.flagin(flag, self.flagerrors):
+                    print("Error", self.flagerrors, flags, filepath, "resolve manually")
+                    sys.exit()
+
+
     def dirty_repos(self):
         self.dirty = set()
         for repo, v in self.repos.items():
-            status = v['obj'].status()
-            dirt = list()
-            for filepath, flag in status.items():
-                if flag in self.flagflags:
-                    dirt.append((filepath, flag))
-                if flag in self.flagerrors:
-                    exit("Error", self.flagerrors, flag, filepath, "resolve manually")
-            if len(dirt):
-                self.dirty.add(repo)
-                self.repos[repo]['dirt'] = tuple(sorted(dirt))
+            for flag in v['flags']:
+                if self.flagin(flag, self.flagupdate):
+                    self.dirty.add(repo)
 
 
     def diff_repos(self):
         self.diff = set()
         for repo, v in self.repos.items():
-            if len(v['obj'].diff(cached=True)):
-                self.diff.add(repo)
+            for flag in v['flags']:
+                if self.flagin(flag, self.flagcommit):
+                    self.diff.add(repo)
 
 
     def ahead_repos(self):
@@ -236,14 +274,16 @@ class GitStatusBot():
             repo_obj = self.repos[repo]['obj']
             index = repo_obj.index
             index.read()
-            if 'dirt' in self.repos[repo]:
-                for path, flag in self.repos[repo]['dirt']:
-                    if flag == GIT_STATUS_WT_DELETED:
-                        index.remove(path)
-                    else:
-                        index.add(path)
+            for path, flags in self.repos[repo]['fileflags']:
+                for flag in flags:
+                    if self.flagin(flag, self.flagupdate):
+                        if pygit2.GIT_STATUS_WT_DELETED in flags:
+                            index.remove(path)
+                        else:
+                            index.add(path)
+                        break
                 index.write()
-                return True
+            return True
         return False
 
 
