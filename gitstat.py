@@ -2,12 +2,10 @@
 
 import os
 import sys
-import getpass
 import argparse
 from pathlib import Path
 from glob import glob
 from collections import defaultdict
-
 from fuzzywuzzy import process
 import pygit2
 from pygit2 import Repository
@@ -24,23 +22,6 @@ from pygit2 import GitError
 # represents the status of file in the index relative to the HEAD, and the
 # `GIT_STATUS_WT` set of flags represent the status of the file in the
 # working directory relative to the index.
-#
-# working tree (WT) -> index -> HEAD
-#
-# becaue I am working to update the index to match the working directory/tree
-# will only need to work with the GIT_STATUS_WT. Sadly git_index_update_all
-# from libgit2 does not have a method in pygit2 so I need to do this myself.
-#
-# GIT_STATUS_CURRENT
-# GIT_STATUS_WT_NEW                  index.add()
-# GIT_STATUS_WT_MODIFIED             index.add()
-# GIT_STATUS_WT_DELETED              index.remove()
-# GIT_STATUS_WT_RENAMED              index.add()
-# GIT_STATUS_WT_UNREADABLE           error
-# GIT_STATUS_IGNORED                 well just ignore it I guess
-# GIT_STATUS_CONFLICTED              error
-# GIT_STATUS_WT_TYPECHANGE           symlink to file or file to symlink resolve manually
-# GIT_STATUS_INDEX_TYPECHANGE        symlink to file or file to symlink resolve manually
 
 class GitStatusBot():
 
@@ -355,14 +336,6 @@ def cli_parse():
                         '--push',
                         action='store_true',
                         help='git push origin/master')
-    parser.add_argument('-f',
-                        '--force',
-                        action='store_true',
-                        help='do not prompt')
-    parser.add_argument('-q',
-                        '--quiet',
-                        action='store_true',
-                        help='no output')
     args = parser.parse_args()
     if args.sync:
         args.update = True
@@ -370,11 +343,14 @@ def cli_parse():
         args.push = True
     return args
 
+
 def main():
     args = cli_parse()
+
     home = Path.home()
-    paths = ['scripts', 'configuration', 'development', '.password-store', 'ansible','vimwiki']
+    paths = ['scripts', 'configuration', 'development', '.password-store', 'ansible', 'vimwiki']
     paths = [home / Path(path) for path in paths]
+
     if args.message is None:
         args.message = 'committed by gitstat.py'
 
