@@ -192,7 +192,7 @@ class GitStatusBot():
             flags = ''
             id_col = id_dent[:digits - len(str(idx + 1))] + str(idx + 1) + ')'
             list_str += id_col + self.git_flags(repo) + ' ' + repo + '\n'
-        return list_str
+        return list_str.rstrip()
 
 
     def find_repos(self):
@@ -337,6 +337,8 @@ def cli_parse():
                         action='store_true',
                         help='git push origin/master')
     args = parser.parse_args()
+    if not len(sys.argv) > 1:
+        args.list = True
     if args.sync:
         args.update = True
         args.commit = True
@@ -375,6 +377,7 @@ def main():
         repos = gitbot.match(args.repo)
 
     if not isinstance(repos, list):
+        print("No repos")
         sys.exit()
 
     if args.update:
