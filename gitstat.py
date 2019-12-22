@@ -280,7 +280,7 @@ class GitStatusBot():
                     self.committer,
                     msg,
                     index.write_tree(),
-                    [repo_obj.head.get_object().hex])
+                    [repo_obj.head.target])
                 return True
             except Exception as e:
                 return e
