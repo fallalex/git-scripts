@@ -350,7 +350,7 @@ def main():
     args = cli_parse()
 
     home = Path.home()
-    paths = ['scripts', 'configuration', 'development', '.password-store', 'ansible', 'vimwiki']
+    paths = ['go/src/external_ip', 'go/src/ddns_cloudflare', 'scripts', 'configuration', 'development', '.password-store', 'ansible', 'vimwiki']
     paths = [home / Path(path) for path in paths]
 
     if args.message is None:
