@@ -15,6 +15,22 @@ from pygit2 import KeypairFromAgent
 from pygit2 import RemoteCallbacks
 from pygit2 import GitError
 
+# TODO:
+# - better interface with prompt-toolkit
+# - config file
+# - add support for branches (HEAD over master)
+# - distributable
+# - otption to jump to directory
+# - display path to repo
+# - at-a-glance info
+#    - last commit
+#    - current branch
+# - better ssh support
+#    - ssh-add
+#    - password prompt
+# - better errors
+# - tests
+
 # Status flags for a single file.
 # A combination of these values will be returned to indicate the status of
 # a file.  Status compares the working directory, the index, and the
