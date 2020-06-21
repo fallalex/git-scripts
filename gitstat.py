@@ -17,15 +17,9 @@ from pygit2 import GitError
 
 # TODO:
 # - better interface with prompt-toolkit
-# - config file
-# - switch from mass add repos by glob to repo list
-# - interface for adding repo paths to list
-#   - could use git alias
-#   - account for repo movement
 # - add support for branches (HEAD over master)
 # - distributable
 # - option to jump to directory
-# - display path to repo
 # - at-a-glance info
 #   - last commit
 #   - current branch
@@ -34,8 +28,21 @@ from pygit2 import GitError
 #   - password prompt
 # - better errors
 # - tests
-# - fix sync need to check state between steps or cache state on steps
-# - not reflecting need to push
+
+# - config file
+#   - list of path strings with newline delimiter
+#   - comment lines with '#'
+# - switch from mass add repos by glob to repo list
+# - re-write to do ahead, diff, dirty per repo and update flags on action to repo
+# - interface for adding repo paths to list
+#   - could use git alias
+#   - account for repo movement
+
+# REPL Development reload file
+# $ ptpython
+# >>> from importlib import reload
+# >>> import gitstat
+# >>> reload(gitstat)
 
 # Status flags for a single file.
 # A combination of these values will be returned to indicate the status of
@@ -47,9 +54,7 @@ from pygit2 import GitError
 
 class GitStatusBot():
 
-    def __init__(self, paths):
-        self.paths = paths
-        self.glob_pattern = '/**/.git'
+    def __init__(self):
         self.committer = Signature('GitStatusBot', 'gitstat@fallalex.com')
         self.push_user = 'git'
         self.flagerrors = ['GIT_STATUS_CONFLICTED', 'GIT_STATUS_WT_UNREADABLE',\
@@ -74,8 +79,24 @@ class GitStatusBot():
                              'GIT_STATUS_CONFLICTED'       : pygit2.GIT_STATUS_CONFLICTED}
         self.status_flags_value = dict ( (v,k) for k, v in self.status_flags.items() )
 
+
+    def status(self, paths):
+        self.path_strings = paths
         self.find_repos()
         self.grab_latest()
+
+
+    def load_conf(self, path_str=''):
+        self.conf_path = Path.home() / ".gitstat"
+        if path_str:
+            conf_paths = self.path_interp(path_str)
+            if len(conf_paths) == 1:
+                self.conf_path = conf_path[0]
+            else:
+                print("cant find conf")
+                sys.exit()
+        with open(str(self.conf_path)) as conf_file:
+            conf_content = conf_file.read()
 
 
     def grab_latest(self):
@@ -146,10 +167,6 @@ class GitStatusBot():
         if query == 'all':
             return  sorted(list(self.repos.keys()))
 
-        # allow current directory 'dot' syntax
-        if query.strip() == '.':
-            query = str(Path(os.getcwd()).parts[-1])
-
         # exact match
         if query in self.repos:
             return [query]
@@ -217,21 +234,26 @@ class GitStatusBot():
         return list_str.rstrip()
 
 
+    def path_interp(self, string):
+        path_str = os.path.abspath(os.path.expanduser(string))
+        return [Path(p) for p in glob(path_str) if Path(p).exists()]
+
+
+    def repo_path_interp(self, string):
+        return [p for p in self.path_interp(string) if (p / ".git").exists()]
+
+
     def find_repos(self):
         self.repos = defaultdict(lambda: defaultdict(None))
-        for path in self.paths:
-            if path.is_dir():
-                glob_str = str(path) + self.glob_pattern
-                for path in glob(glob_str, recursive=True):
-                    path = Path(path)
-                    repo = str(path.parts[-2])
-                    self.repos[repo]['path'] = path
-                    self.repos[repo]['obj'] = Repository(str(path))
+        for string in self.path_strings:
+            for path in self.repo_path_interp(string):
+                repo_path_str = str(path)
+                self.repos[repo_path_str]['repo'] = Repository(repo_path_str)
 
 
     def repo_flags(self):
         for repo, v in self.repos.items():
-            status = v['obj'].status()
+            status = v['repo'].status()
             v['fileflags'] = set()
             v['flags'] = set()
             for filepath, flags in status.items():
@@ -264,8 +286,8 @@ class GitStatusBot():
         self.ahead = set()
         branches = {'master', 'origin/master'}
         for repo, v in self.repos.items():
-            if set(v['obj'].branches) == branches:
-                repo_branches = v['obj'].branches
+            if set(v['repo'].branches) == branches:
+                repo_branches = v['repo'].branches
                 local = repo_branches['master']
                 origin = repo_branches['origin/master']
                 if local.is_head() and local.target != origin.target:
@@ -274,7 +296,7 @@ class GitStatusBot():
 
     def git_update(self, repo):
         if repo in self.dirty:
-            repo_obj = self.repos[repo]['obj']
+            repo_obj = self.repos[repo]['repo']
             index = repo_obj.index
             index.read()
             for path, flags in self.repos[repo]['fileflags']:
@@ -292,7 +314,7 @@ class GitStatusBot():
 
     def git_commit(self, repo, msg):
         if repo in self.diff:
-            repo_obj = self.repos[repo]['obj']
+            repo_obj = self.repos[repo]['repo']
             index = repo_obj.index
             index.read()
             try:
@@ -311,7 +333,7 @@ class GitStatusBot():
 
     def git_push(self, repo):
         if repo in self.ahead:
-            repo_obj = self.repos[repo]['obj']
+            repo_obj = self.repos[repo]['repo']
             origin = repo_obj.remotes['origin']
             credentials = KeypairFromAgent(self.push_user)
             origin.credentials = credentials
@@ -369,34 +391,33 @@ def cli_parse():
 
 
 def main():
+    gitbot = GitStatusBot()
     args = cli_parse()
 
-    home = Path.home()
-    paths = ['go/src/external_ip', 'go/src/ddns_cloudflare', 'scripts', 'configuration', 'development', '.password-store', 'ansible', 'vimwiki']
-    paths = [home / Path(path) for path in paths]
+    if args.repo:
+        repos = gitbot.repo_path_interp(args.repo)
+        gitbot.status(repos)
+        print(repos)
+        #repos = gitbot.match(args.repo)
 
     if args.message is None:
         args.message = 'committed by gitstat.py'
-
-    gitbot = GitStatusBot(paths)
 
     if args.list:
         print(gitbot.list_repos())
         sys.exit()
 
     if args.repo is None:
-        print(gitbot.list_repos())
-        entry = gitbot.prompt_int_range(
-            "Which repo(s)?",
-            list(range(1,len(gitbot.repos)+1)))
+        sys.exit()
+    #     print(gitbot.list_repos())
+    #     entry = gitbot.prompt_int_range(
+    #         "Which repo(s)?",
+    #         list(range(1,len(gitbot.repos)+1)))
 
-        if entry == False:
-            sys.exit()
-        else:
-            repos = gitbot.match(entry)
-
-    if args.repo:
-        repos = gitbot.match(args.repo)
+    #     if entry == False:
+    #         sys.exit()
+    #     else:
+    #         repos = gitbot.match(entry)
 
     if not isinstance(repos, list):
         print("No repos")
@@ -404,13 +425,13 @@ def main():
 
     if args.update:
         for repo in repos:
-            if gitbot.git_update(repo):
+            if gitbot.git_update(str(repo)):
                 print('Indexed', repo)
         gitbot.grab_latest()
 
     if args.commit:
         for repo in repos:
-            result = gitbot.git_commit(repo, args.message)
+            result = gitbot.git_commit(str(repo), args.message)
             if result is True:
                 print('Committed', repo)
             elif result is not False:
@@ -419,7 +440,7 @@ def main():
 
     if args.push:
         for repo in repos:
-            result = gitbot.git_push(repo)
+            result = gitbot.git_push(str(repo))
             if result is True:
                 print('Pushed', repo)
             elif result is not False:
