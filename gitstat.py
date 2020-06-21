@@ -37,6 +37,7 @@ from pygit2 import GitError
 # - interface for adding repo paths to list
 #   - could use git alias
 #   - account for repo movement
+# - get push working
 
 # REPL Development reload file
 # $ ptpython
