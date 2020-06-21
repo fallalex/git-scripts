@@ -18,16 +18,20 @@ from pygit2 import GitError
 # TODO:
 # - better interface with prompt-toolkit
 # - config file
+# - switch from mass add repos by glob to repo list
+# - interface for adding repo paths to list
+#   - could use git alias
+#   - account for repo movement
 # - add support for branches (HEAD over master)
 # - distributable
-# - otption to jump to directory
+# - option to jump to directory
 # - display path to repo
 # - at-a-glance info
-#    - last commit
-#    - current branch
+#   - last commit
+#   - current branch
 # - better ssh support
-#    - ssh-add
-#    - password prompt
+#   - ssh-add
+#   - password prompt
 # - better errors
 # - tests
 
