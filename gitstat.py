@@ -34,6 +34,8 @@ from pygit2 import GitError
 #   - password prompt
 # - better errors
 # - tests
+# - fix sync need to check state between steps or cache state on steps
+# - not reflecting need to push
 
 # Status flags for a single file.
 # A combination of these values will be returned to indicate the status of
