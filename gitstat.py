@@ -346,13 +346,13 @@ class GitStatusBot():
             credentials = KeypairFromAgent(self.push_user)
             origin.credentials = credentials
             callbacks = RemoteCallbacks(credentials=credentials)
-            # try:
-            origin.push(
-                [repo_obj.head.name],
-                callbacks=callbacks)
-            return True
-            # except GitError as e:
-                # return e
+            try:
+                origin.push(
+                    [repo_obj.head.name],
+                    callbacks=callbacks)
+                return True
+            except GitError as e:
+                return e
         return False
 
 
