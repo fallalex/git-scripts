@@ -340,7 +340,7 @@ class GitStatusBot():
         if repo in self.ahead:
             repo_obj = self.repos[repo]['repo']
             origin = repo_obj.remotes['origin']
-            print(repo_obj.remotes["origin"])
+            print(repo_obj.remotes["origin"].url)
             credentials = KeypairFromAgent(self.push_user)
             origin.credentials = credentials
             callbacks = RemoteCallbacks(credentials=credentials)
