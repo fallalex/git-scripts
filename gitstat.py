@@ -337,6 +337,8 @@ class GitStatusBot():
 
 
     def git_push(self, repo):
+        if pygit2.features & pygit2.GIT_FEATURE_SSH:
+            print("libgit2/pygit2 cant use SSH")
         if repo in self.ahead:
             repo_obj = self.repos[repo]['repo']
             origin = repo_obj.remotes['origin']
