@@ -285,14 +285,18 @@ class GitStatusBot():
 
     def ahead_repos(self):
         self.ahead = set()
-        branches = {'master', 'origin/master'}
         for repo, v in self.repos.items():
-            if set(v['repo'].branches) == branches:
-                repo_branches = v['repo'].branches
-                local = repo_branches['master']
-                origin = repo_branches['origin/master']
-                if local.is_head() and local.target != origin.target:
+            repo_obj = v['repo']
+            try:
+                upstream_head = repo_obj.revparse_single('origin/HEAD')
+                local_head = repo_obj.revparse_single('HEAD')
+                ahead, behind = repo_obj.ahead_behind(local_head.id, upstream_head.id)
+                if ahead:
                     self.ahead.add(repo)
+            except KeyError:
+                print("Need HEAD on local and origin")
+            except Exception as e:
+                print(e)
 
 
     def git_update(self, repo):
