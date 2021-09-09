@@ -33,4 +33,4 @@ git remote add origin $GIT_URL$REPO_NAME
 git remote set-url origin $GIT_URL$REPO_NAME
 rm -rf $BARE_REPO_PATH
 git fetch origin
-git branch -u origin/master
+git branch -u origin/main
