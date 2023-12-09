@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# List all the repo urls listed in the file github_repos_paginator.py outputs
 from pathlib import Path
 import json
 

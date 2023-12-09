@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Stitch all the paginated responses into one json object
 from pathlib import Path
 import sys,json
 
