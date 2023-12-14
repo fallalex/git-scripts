@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# List all my private repo urls by calling:
-#     ssh git@git.labfall.com bare-repos
-#
-# Add to PATH and call from /home/git/.bash_profile of git server
+# List all my private repo urls
+# Add this script to the path and call it in /home/git/.bash_profile of my bare git server
 
-fd --base-directory=/srv/git -uue git -x readlink -f | xargs -L1 -I '$' echo 'git@git.fallalex.com:$'
+git_path=/srv/git
+fd --base-directory=$git_path -uue git -x echo "git@git.labfall.com:$git_path/{}"
+
